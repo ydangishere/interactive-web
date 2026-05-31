@@ -11,6 +11,7 @@
 
   const viewport = $('#viewport');
   const content  = $('#content');
+  const isFigmaCapture = window.location.hash.includes('figmacapture=');
 
   /* ---------------------------------------------------------
      0 · Failsafe — if anything throws, reveal everything
@@ -85,6 +86,23 @@
     const CIRC = 175.9;
     let started = false;
 
+    if (isFigmaCapture) {
+      if (loader) loader.style.display = 'none';
+      ['#menu', '#stickyCta', '#vmodal'].forEach(selector => {
+        const node = $(selector);
+        if (node) node.style.display = 'none';
+      });
+      const interiorHero = $('.int-hero');
+      if (interiorHero) {
+        interiorHero.style.backgroundImage = "url('assets/interior.jpg')";
+        interiorHero.style.backgroundSize = 'cover';
+        interiorHero.style.backgroundPosition = '60% 50%';
+        const interiorImg = $('img', interiorHero);
+        if (interiorImg) interiorImg.style.display = 'none';
+      }
+      revealAll();
+      startExperience();
+    } else {
     (function runLoader() {
       const lw  = $('.loader .lw');
       const lbl = $('#loadLbl');
@@ -100,11 +118,13 @@
         ringFg.style.strokeDashoffset = CIRC * (1 - p / 100);
       }, 130);
     })();
+    }
 
     function finishLoad() {
       setTimeout(() => {
         loader.classList.add('done');
         startExperience();
+        if (typeof window.__jaguarSoundBoot === 'function') window.__jaguarSoundBoot();
         setTimeout(() => { loader.style.display = 'none'; }, 1000);
       }, 360);
     }
@@ -160,6 +180,142 @@
         });
       });
     }
+
+    /* =========================================================
+       BACKGROUND SOUND  (local MP3, start 0:20)
+    ========================================================= */
+    (function backgroundSound() {
+      const soundBtn = $('#soundBtn');
+      const bgMusic = $('#bgMusic');
+      if (!soundBtn || !bgMusic) return;
+
+      const START_SEC = 20;
+      let isPlaying = false;
+      let audioCtx = null;
+      let fxReady = false;
+      let noiseGain = null;
+
+      function setSoundUi(playing) {
+        isPlaying = playing;
+        soundBtn.classList.toggle('is-muted', !playing);
+        soundBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+      }
+
+      function makeDistortionCurve(amount) {
+        const samples = 44100;
+        const curve = new Float32Array(samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < samples; i += 1) {
+          const x = (i * 2) / samples - 1;
+          curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x));
+        }
+        return curve;
+      }
+
+      function createNoiseBuffer(ctx) {
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+        return buffer;
+      }
+
+      function createReverbBuffer(ctx) {
+        const length = Math.floor(ctx.sampleRate * 0.9);
+        const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+        for (let channel = 0; channel < 2; channel += 1) {
+          const data = buffer.getChannelData(channel);
+          for (let i = 0; i < length; i += 1) {
+            const decay = Math.pow(1 - i / length, 2.4);
+            data[i] = (Math.random() * 2 - 1) * decay;
+          }
+        }
+        return buffer;
+      }
+
+      function setupSoftRadioFx() {
+        if (fxReady) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+
+        audioCtx = audioCtx || new AudioContext();
+        const source = audioCtx.createMediaElementSource(bgMusic);
+        const highpass = audioCtx.createBiquadFilter();
+        const lowpass = audioCtx.createBiquadFilter();
+        const midBoost = audioCtx.createBiquadFilter();
+        const distortion = audioCtx.createWaveShaper();
+        const dryGain = audioCtx.createGain();
+        const reverb = audioCtx.createConvolver();
+        const reverbGain = audioCtx.createGain();
+        const outputGain = audioCtx.createGain();
+
+        highpass.type = 'highpass';
+        highpass.frequency.value = 120;
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 9000;
+        midBoost.type = 'peaking';
+        midBoost.frequency.value = 1800;
+        midBoost.Q.value = 0.8;
+        midBoost.gain.value = 1.5;
+        distortion.curve = makeDistortionCurve(2);
+        distortion.oversample = '2x';
+        dryGain.gain.value = 0.95;
+        reverb.buffer = createReverbBuffer(audioCtx);
+        reverbGain.gain.value = 0.05;
+        outputGain.gain.value = 0.96;
+
+        source.connect(highpass);
+        highpass.connect(lowpass);
+        lowpass.connect(midBoost);
+        midBoost.connect(distortion);
+        distortion.connect(dryGain);
+        distortion.connect(reverb);
+        dryGain.connect(outputGain);
+        reverb.connect(reverbGain);
+        reverbGain.connect(outputGain);
+        outputGain.connect(audioCtx.destination);
+
+        const noiseSource = audioCtx.createBufferSource();
+        noiseGain = audioCtx.createGain();
+        noiseGain.gain.value = 0;
+        noiseSource.buffer = createNoiseBuffer(audioCtx);
+        noiseSource.loop = true;
+        noiseSource.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noiseSource.start();
+
+        fxReady = true;
+      }
+
+      function playFromStart() {
+        setSoundUi(true);
+        setupSoftRadioFx();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (noiseGain) noiseGain.gain.value = 0.0008;
+        bgMusic.currentTime = START_SEC;
+        bgMusic.volume = 0.5;
+        bgMusic.play().catch(() => setSoundUi(false));
+      }
+
+      function pauseSound() {
+        if (noiseGain) noiseGain.gain.value = 0;
+        bgMusic.pause();
+        setSoundUi(false);
+      }
+
+      setSoundUi(false);
+      bgMusic.addEventListener('play', () => setSoundUi(true));
+      bgMusic.addEventListener('pause', () => setSoundUi(false));
+      bgMusic.addEventListener('ended', () => setSoundUi(false));
+
+      soundBtn.addEventListener('click', () => {
+        if (isPlaying) pauseSound();
+        else playFromStart();
+      });
+
+      window.__jaguarSoundBoot = () => {
+        playFromStart();
+      };
+    })();
 
     /* =========================================================
        MENU OPEN / CLOSE

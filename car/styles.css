@@ -165,6 +165,15 @@ a{color:inherit;text-decoration:none}
 .header .right-min span{display:block;height:1.5px;width:22px;background:var(--text)}
 .header .menu-btn,.header .right-min{transform:translateY(10px)}
 
+.sound-btn{
+  position:absolute;top:68px;left:22px;z-index:65;
+  font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;font-weight:500;
+  color:var(--text);opacity:1;padding:4px 0;
+  transition:opacity .35s var(--ease),color .35s var(--ease);
+}
+.sound-btn.is-muted{opacity:.32}
+.sound-btn:active{color:var(--silver-2)}
+
 /* ============================================================
    FULLSCREEN MENU OVERLAY
    ============================================================ */
