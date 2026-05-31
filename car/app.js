@@ -621,4 +621,22 @@
     window.addEventListener('load', () => { if (hasST) ScrollTrigger.refresh(); });
     setTimeout(() => { if (hasST) ScrollTrigger.refresh(); }, 1200);
   }
+
+  /* scale phone frame to fit viewport (prototype shell, layout stays 390×844) */
+  (function fitDeviceFrame() {
+    if (isFigmaCapture) return;
+    const pad = 24;
+    function fit() {
+      const device = document.querySelector('.device');
+      if (!device) return;
+      if (window.innerWidth < 60 || window.innerHeight < 60) return;
+      const s = Math.max(0.2, Math.min((window.innerWidth - pad) / 412, (window.innerHeight - pad) / 866, 1));
+      device.style.transform = 'scale(' + s + ')';
+      if (typeof ScrollTrigger !== 'undefined') ScrollTrigger.refresh();
+    }
+    window.addEventListener('resize', fit);
+    const fitLoop = setInterval(fit, 200);
+    setTimeout(() => clearInterval(fitLoop), 2000);
+    setTimeout(fit, 60);
+  })();
 })();
